@@ -1,6 +1,7 @@
 
 import { supabase } from "@/integrations/supabase/client";
 import { Game, League, Sport, Team } from "@/types";
+import { toast } from "sonner";
 
 export type FootballFixture = {
   fixture: {
@@ -88,11 +89,23 @@ export const fetchFootballGames = async (params: Record<string, string>) => {
     });
 
     if (error) throw error;
+    
+    // Check if the API returned errors (e.g., rate limit)
+    if (data.errors && Object.keys(data.errors).length > 0) {
+      console.warn("API returned errors:", data.errors);
+      
+      if (data.errors.requests) {
+        toast.error("API Football rate limit reached for football data.");
+      }
+      
+      return [];
+    }
 
-    return mapFootballFixturesToGames(data.response);
+    return mapFootballFixturesToGames(data.response || []);
   } catch (error) {
     console.error("Error fetching football games:", error);
-    throw error;
+    toast.error("Failed to load football games.");
+    return [];
   }
 };
 
@@ -108,11 +121,23 @@ export const fetchBasketballGames = async (params: Record<string, string>) => {
     });
 
     if (error) throw error;
+    
+    // Check if the API returned errors (e.g., rate limit)
+    if (data.errors && Object.keys(data.errors).length > 0) {
+      console.warn("API returned errors:", data.errors);
+      
+      if (data.errors.requests) {
+        toast.error("API Football rate limit reached for basketball data.");
+      }
+      
+      return [];
+    }
 
-    return mapBasketballGamesToGames(data.response);
+    return mapBasketballGamesToGames(data.response || []);
   } catch (error) {
     console.error("Error fetching basketball games:", error);
-    throw error;
+    toast.error("Failed to load basketball games.");
+    return [];
   }
 };
 
@@ -131,6 +156,21 @@ export const fetchFootballLeagues = async (country?: string) => {
     });
 
     if (error) throw error;
+    
+    // Check if the API returned errors (e.g., rate limit)
+    if (data.errors && Object.keys(data.errors).length > 0) {
+      console.warn("API returned errors:", data.errors);
+      
+      if (data.errors.requests) {
+        toast.error("API Football rate limit reached for football leagues.");
+      }
+      
+      return [];
+    }
+
+    if (!data.response || !Array.isArray(data.response)) {
+      return [];
+    }
 
     return data.response.map((item: any) => ({
       id: String(item.league.id),
@@ -141,7 +181,8 @@ export const fetchFootballLeagues = async (country?: string) => {
     }));
   } catch (error) {
     console.error("Error fetching football leagues:", error);
-    throw error;
+    toast.error("Failed to load football leagues.");
+    return [];
   }
 };
 
@@ -160,6 +201,21 @@ export const fetchBasketballLeagues = async (country?: string) => {
     });
 
     if (error) throw error;
+    
+    // Check if the API returned errors (e.g., rate limit)
+    if (data.errors && Object.keys(data.errors).length > 0) {
+      console.warn("API returned errors:", data.errors);
+      
+      if (data.errors.requests) {
+        toast.error("API Football rate limit reached for basketball leagues.");
+      }
+      
+      return [];
+    }
+
+    if (!data.response || !Array.isArray(data.response)) {
+      return [];
+    }
 
     return data.response.map((item: any) => ({
       id: String(item.id),
@@ -170,12 +226,15 @@ export const fetchBasketballLeagues = async (country?: string) => {
     }));
   } catch (error) {
     console.error("Error fetching basketball leagues:", error);
-    throw error;
+    toast.error("Failed to load basketball leagues.");
+    return [];
   }
 };
 
 // Helper function to map football fixtures to our Game type
 const mapFootballFixturesToGames = (fixtures: FootballFixture[]): Game[] => {
+  if (!fixtures || !Array.isArray(fixtures)) return [];
+  
   return fixtures.map(fixture => {
     // Define the sport
     const sport: Sport = { id: "1", name: "Football", icon: "⚽" };
@@ -234,6 +293,8 @@ const mapFootballFixturesToGames = (fixtures: FootballFixture[]): Game[] => {
 
 // Helper function to map basketball games to our Game type
 const mapBasketballGamesToGames = (games: BasketballGame[]): Game[] => {
+  if (!games || !Array.isArray(games)) return [];
+  
   return games.map(game => {
     // Define the sport
     const sport: Sport = { id: "2", name: "Basketball", icon: "🏀" };

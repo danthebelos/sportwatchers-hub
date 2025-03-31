@@ -24,25 +24,34 @@ serve(async (req) => {
       throw new Error("API_FOOTBALL_KEY is not set");
     }
 
-    const url = new URL(req.url);
-    const sport = url.searchParams.get("sport") || "football";
-    const endpoint = url.searchParams.get("endpoint") || "fixtures";
-    
-    // Get other parameters
-    const params = new URLSearchParams();
-    for (const [key, value] of url.searchParams.entries()) {
-      if (key !== "sport" && key !== "endpoint") {
-        params.append(key, value);
+    // Parse the request body
+    let requestData = {};
+    if (req.method === "POST") {
+      try {
+        requestData = await req.json();
+      } catch (error) {
+        console.error("Error parsing request body:", error);
+        throw new Error("Invalid request body");
       }
     }
+
+    const { sport = "football", endpoint = "fixtures", ...params } = requestData;
     
     // Select the correct base URL based on the sport
     const baseUrl = sport === "basketball" 
       ? BASKETBALL_API_BASE_URL 
       : FOOTBALL_API_BASE_URL;
-      
+    
+    // Build the query parameters
+    const queryParams = new URLSearchParams();
+    for (const [key, value] of Object.entries(params)) {
+      if (value) {
+        queryParams.append(key, String(value));
+      }
+    }
+    
     // Construct the full API URL
-    const apiUrl = `${baseUrl}/${endpoint}?${params.toString()}`;
+    const apiUrl = `${baseUrl}/${endpoint}${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
     
     console.log(`Fetching from: ${apiUrl}`);
     
@@ -52,13 +61,21 @@ serve(async (req) => {
       },
     });
     
-    if (!response.ok) {
-      const errorData = await response.json();
-      console.error("API Error:", errorData);
-      throw new Error(`API returned error: ${response.status}`);
-    }
-    
     const data = await response.json();
+    
+    // Handle API rate limit or other errors
+    if (data.errors && Object.keys(data.errors).length > 0) {
+      console.error("API Error:", data.errors);
+      
+      // Return the error response with appropriate status code
+      return new Response(JSON.stringify(data), {
+        status: 429, // Rate limit or other API error
+        headers: {
+          ...corsHeaders,
+          "Content-Type": "application/json",
+        },
+      });
+    }
     
     // Return the API response with CORS headers
     return new Response(JSON.stringify(data), {

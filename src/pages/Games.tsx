@@ -1,12 +1,8 @@
 
 import { useState, useEffect } from "react";
-import {
-  Card,
-  CardContent,
-} from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { sports } from "@/data/mockData";
-import { Game as GameType, League } from "@/types";
+import { Game as GameType } from "@/types";
 import { CalendarDays, Clock, Filter, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -18,21 +14,19 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { fetchFootballGames, fetchFootballLeagues, fetchBasketballGames, fetchBasketballLeagues } from "@/services/apiService";
+import { fetchFootballGames, fetchBasketballGames, fetchFootballLeagues, fetchBasketballLeagues } from "@/services/apiService";
 import { format } from "date-fns";
 import { Link } from "react-router-dom";
+import { toast } from "sonner";
 
 const Games = () => {
-  const [activeTab, setActiveTab] = useState<string>("football");
-  const [sportFilter, setSportFilter] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<string>("basketball"); // Default to basketball since football API limit is exhausted
   const [leagueFilter, setLeagueFilter] = useState<string | null>(null);
   const [dateFilter, setDateFilter] = useState<string | null>(null);
-  const [seasonFilter, setSeasonFilter] = useState<string | null>(null);
-  const [teamFilter, setTeamFilter] = useState<string | null>(null);
+  const [seasonFilter, setSeasonFilter] = useState<string | null>("2023"); // Set default season
   
-  const [upcomingGames, setUpcomingGames] = useState<GameType[]>([]);
-  const [finishedGames, setFinishedGames] = useState<GameType[]>([]);
-  const [leagues, setLeagues] = useState<League[]>([]);
+  const [games, setGames] = useState<GameType[]>([]);
+  const [leagues, setLeagues] = useState<any[]>([]);
   
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -65,85 +59,54 @@ const Games = () => {
       setError(null);
       
       try {
-        let upcomingParams: Record<string, string> = {};
-        let finishedParams: Record<string, string> = {};
+        let params: Record<string, string> = {};
         
         if (activeTab === "football") {
           // Football parameters
           if (leagueFilter) {
-            upcomingParams.league = leagueFilter;
-            finishedParams.league = leagueFilter;
+            params.league = leagueFilter;
           }
           
           if (dateFilter) {
-            upcomingParams.date = dateFilter;
-            finishedParams.date = dateFilter;
+            params.date = dateFilter;
           } else {
-            // Default: next 7 days for upcoming
-            const tomorrow = new Date();
-            tomorrow.setDate(tomorrow.getDate() + 1);
-            const nextWeek = new Date();
-            nextWeek.setDate(nextWeek.getDate() + 7);
-            
-            upcomingParams.from = format(tomorrow, 'yyyy-MM-dd');
-            upcomingParams.to = format(nextWeek, 'yyyy-MM-dd');
-            
-            // Last 7 days for finished
-            const lastWeek = new Date();
-            lastWeek.setDate(lastWeek.getDate() - 7);
-            const yesterday = new Date();
-            yesterday.setDate(yesterday.getDate() - 1);
-            
-            finishedParams.from = format(lastWeek, 'yyyy-MM-dd');
-            finishedParams.to = format(yesterday, 'yyyy-MM-dd');
+            // Default: today's date
+            params.date = format(new Date(), 'yyyy-MM-dd');
           }
           
-          const [upcomingData, finishedData] = await Promise.all([
-            fetchFootballGames(upcomingParams),
-            fetchFootballGames(finishedParams)
-          ]);
+          const footballGames = await fetchFootballGames(params);
+          setGames(footballGames);
           
-          setUpcomingGames(upcomingData);
-          setFinishedGames(finishedData);
+          if (footballGames.length === 0) {
+            toast.info("No football games found. This might be due to API rate limits.");
+          }
         } else {
           // Basketball parameters
           if (leagueFilter) {
-            upcomingParams.league = leagueFilter;
-            finishedParams.league = leagueFilter;
+            params.league = leagueFilter;
           }
           
           if (seasonFilter) {
-            upcomingParams.season = seasonFilter;
-            finishedParams.season = seasonFilter;
+            params.season = seasonFilter;
           } else {
             // Current year as default season
             const currentYear = new Date().getFullYear();
-            upcomingParams.season = currentYear.toString();
-            finishedParams.season = currentYear.toString();
+            params.season = currentYear.toString();
           }
           
           if (dateFilter) {
-            upcomingParams.date = dateFilter;
-            finishedParams.date = dateFilter;
+            params.date = dateFilter;
           } else {
-            // Default: next 7 days for upcoming
-            const tomorrow = new Date();
-            tomorrow.setDate(tomorrow.getDate() + 1);
-            upcomingParams.date = format(tomorrow, 'yyyy-MM-dd');
-            
-            // Yesterday for finished
-            const yesterday = new Date();
-            yesterday.setDate(yesterday.getDate() - 1);
-            finishedParams.date = format(yesterday, 'yyyy-MM-dd');
+            // Default: today's date
+            params.date = format(new Date(), 'yyyy-MM-dd');
           }
           
-          const [upcomingData, finishedData] = await Promise.all([
-            fetchBasketballGames(upcomingParams),
-            fetchBasketballGames(finishedParams)
-          ]);
+          const basketballGames = await fetchBasketballGames(params);
+          setGames(basketballGames);
           
-          setUpcomingGames(upcomingData);
-          setFinishedGames(finishedData);
+          if (basketballGames.length === 0) {
+            toast.info("Try changing the season or date to find basketball games.");
+          }
         }
       } catch (err) {
         console.error("Error fetching games:", err);
@@ -154,13 +117,16 @@ const Games = () => {
     };
     
     fetchGames();
-  }, [activeTab, leagueFilter, dateFilter, seasonFilter, teamFilter]);
+  }, [activeTab, leagueFilter, dateFilter, seasonFilter]);
   
   const resetFilters = () => {
     setLeagueFilter(null);
     setDateFilter(null);
-    setSeasonFilter(null);
-    setTeamFilter(null);
+    if (activeTab === "basketball") {
+      setSeasonFilter("2023"); // Reset to default season for basketball
+    } else {
+      setSeasonFilter(null);
+    }
   };
 
   const GameCard = ({ game }: { game: GameType }) => (
@@ -262,7 +228,7 @@ const Games = () => {
             </TabsList>
           </Tabs>
           
-          {(leagueFilter || dateFilter || seasonFilter || teamFilter) && (
+          {(leagueFilter || dateFilter || seasonFilter) && (
             <Button variant="ghost" onClick={resetFilters}>
               Clear Filters
             </Button>
@@ -347,6 +313,30 @@ const Games = () => {
                       </DropdownMenuItem>
                     ))}
                   </DropdownMenuGroup>
+                  
+                  <DropdownMenuSeparator />
+                  
+                  <DropdownMenuGroup>
+                    <DropdownMenuLabel className="text-xs text-muted-foreground">Date</DropdownMenuLabel>
+                    <DropdownMenuItem 
+                      className={dateFilter === format(new Date(), 'yyyy-MM-dd') ? "bg-secondary" : ""}
+                      onClick={() => setDateFilter(format(new Date(), 'yyyy-MM-dd'))}
+                    >
+                      Today
+                    </DropdownMenuItem>
+                    <DropdownMenuItem 
+                      className={dateFilter === format(new Date(Date.now() + 86400000), 'yyyy-MM-dd') ? "bg-secondary" : ""}
+                      onClick={() => setDateFilter(format(new Date(Date.now() + 86400000), 'yyyy-MM-dd'))}
+                    >
+                      Tomorrow
+                    </DropdownMenuItem>
+                    <DropdownMenuItem 
+                      className={dateFilter === format(new Date(Date.now() - 86400000), 'yyyy-MM-dd') ? "bg-secondary" : ""}
+                      onClick={() => setDateFilter(format(new Date(Date.now() - 86400000), 'yyyy-MM-dd'))}
+                    >
+                      Yesterday
+                    </DropdownMenuItem>
+                  </DropdownMenuGroup>
                 </>
               )}
             </DropdownMenuContent>
@@ -366,51 +356,22 @@ const Games = () => {
             Try Again
           </Button>
         </div>
+      ) : games.length > 0 ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {games.map(game => (
+            <GameCard key={game.id} game={game} />
+          ))}
+        </div>
       ) : (
-        <Tabs defaultValue="upcoming" className="w-full">
-          <TabsList className="mb-6">
-            <TabsTrigger value="upcoming">Upcoming Games</TabsTrigger>
-            <TabsTrigger value="finished">Finished Games</TabsTrigger>
-          </TabsList>
-          
-          <TabsContent value="upcoming">
-            {upcomingGames.length > 0 ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {upcomingGames.map(game => (
-                  <GameCard key={game.id} game={game} />
-                ))}
-              </div>
-            ) : (
-              <div className="text-center py-12">
-                <h3 className="text-xl font-medium mb-2">No upcoming games found</h3>
-                <p className="text-muted-foreground">
-                  {leagueFilter || dateFilter || seasonFilter || teamFilter 
-                    ? "Try changing or clearing your filters" 
-                    : "Check back later for upcoming games"}
-                </p>
-              </div>
-            )}
-          </TabsContent>
-          
-          <TabsContent value="finished">
-            {finishedGames.length > 0 ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {finishedGames.map(game => (
-                  <GameCard key={game.id} game={game} />
-                ))}
-              </div>
-            ) : (
-              <div className="text-center py-12">
-                <h3 className="text-xl font-medium mb-2">No finished games found</h3>
-                <p className="text-muted-foreground">
-                  {leagueFilter || dateFilter || seasonFilter || teamFilter 
-                    ? "Try changing or clearing your filters" 
-                    : "Games will appear here once they're completed"}
-                </p>
-              </div>
-            )}
-          </TabsContent>
-        </Tabs>
+        <div className="text-center py-12">
+          <h3 className="text-xl font-medium mb-2">No games found</h3>
+          <p className="text-muted-foreground mb-4">
+            {activeTab === "football" 
+              ? "You've reached your daily API limit for football data. Try basketball instead."
+              : "Try changing your filters or season to find basketball games."}
+          </p>
+          <Button onClick={resetFilters}>Reset Filters</Button>
+        </div>
       )}
     </div>
   );
