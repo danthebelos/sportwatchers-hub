@@ -10,6 +10,7 @@ import Games from "./pages/Games";
 import Reviews from "./pages/Reviews";
 import Watchlist from "./pages/Watchlist";
 import Profile from "./pages/Profile";
+import Search from "./pages/Search";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -27,6 +28,7 @@ const App = () => (
             <Route path="/reviews" element={<Reviews />} />
             <Route path="/watchlist" element={<Watchlist />} />
             <Route path="/profile" element={<Profile />} />
+            <Route path="/search" element={<Search />} />
           </Route>
           <Route path="*" element={<NotFound />} />
         </Routes>

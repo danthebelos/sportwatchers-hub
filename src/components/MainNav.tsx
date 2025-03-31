@@ -54,6 +54,7 @@ const MainNav = () => {
                 <NavLink to="/games" icon={<CalendarDays className="h-5 w-5" />} label="Games" />
                 <NavLink to="/reviews" icon={<Star className="h-5 w-5" />} label="Reviews" />
                 <NavLink to="/watchlist" icon={<Clock className="h-5 w-5" />} label="Watchlist" />
+                <NavLink to="/search" icon={<Search className="h-5 w-5" />} label="Search" />
                 <NavLink to="/profile" icon={<User className="h-5 w-5" />} label="Profile" />
               </div>
             </SheetContent>
@@ -72,6 +73,7 @@ const MainNav = () => {
             <NavLink to="/games" icon={<CalendarDays className="h-4 w-4" />} label="Games" />
             <NavLink to="/reviews" icon={<Star className="h-4 w-4" />} label="Reviews" />
             <NavLink to="/watchlist" icon={<Clock className="h-4 w-4" />} label="Watchlist" />
+            <NavLink to="/search" icon={<Search className="h-4 w-4" />} label="Search" />
           </nav>
         </div>
         
