@@ -1,15 +1,13 @@
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Card,
   CardContent,
-  CardHeader,
-  CardTitle,
 } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { getUpcomingGames, getFinishedGames, sports, leagues } from "@/data/mockData";
-import { Game as GameType, League, Sport } from "@/types";
-import { CalendarDays, Clock, Filter } from "lucide-react";
+import { sports } from "@/data/mockData";
+import { Game as GameType, League } from "@/types";
+import { CalendarDays, Clock, Filter, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -20,28 +18,149 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { fetchFootballGames, fetchFootballLeagues, fetchBasketballGames, fetchBasketballLeagues } from "@/services/apiService";
+import { format } from "date-fns";
+import { Link } from "react-router-dom";
 
 const Games = () => {
+  const [activeTab, setActiveTab] = useState<string>("football");
   const [sportFilter, setSportFilter] = useState<string | null>(null);
   const [leagueFilter, setLeagueFilter] = useState<string | null>(null);
+  const [dateFilter, setDateFilter] = useState<string | null>(null);
+  const [seasonFilter, setSeasonFilter] = useState<string | null>(null);
+  const [teamFilter, setTeamFilter] = useState<string | null>(null);
   
-  const upcomingGames = getUpcomingGames();
-  const finishedGames = getFinishedGames();
+  const [upcomingGames, setUpcomingGames] = useState<GameType[]>([]);
+  const [finishedGames, setFinishedGames] = useState<GameType[]>([]);
+  const [leagues, setLeagues] = useState<League[]>([]);
   
-  const filteredUpcomingGames = filterGames(upcomingGames);
-  const filteredFinishedGames = filterGames(finishedGames);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   
-  function filterGames(games: GameType[]): GameType[] {
-    return games.filter(game => {
-      const matchesSport = !sportFilter || game.sport.id === sportFilter;
-      const matchesLeague = !leagueFilter || game.league.id === leagueFilter;
-      return matchesSport && matchesLeague;
-    });
-  }
+  // Fetch leagues when tab changes
+  useEffect(() => {
+    const fetchLeagues = async () => {
+      try {
+        if (activeTab === "football") {
+          const footballLeagues = await fetchFootballLeagues();
+          setLeagues(footballLeagues);
+        } else {
+          const basketballLeagues = await fetchBasketballLeagues();
+          setLeagues(basketballLeagues);
+        }
+      } catch (err) {
+        console.error("Error fetching leagues:", err);
+        setError("Failed to load leagues. Please try again.");
+      }
+    };
+    
+    fetchLeagues();
+    resetFilters();
+  }, [activeTab]);
+  
+  // Fetch games based on filters
+  useEffect(() => {
+    const fetchGames = async () => {
+      setIsLoading(true);
+      setError(null);
+      
+      try {
+        let upcomingParams: Record<string, string> = {};
+        let finishedParams: Record<string, string> = {};
+        
+        if (activeTab === "football") {
+          // Football parameters
+          if (leagueFilter) {
+            upcomingParams.league = leagueFilter;
+            finishedParams.league = leagueFilter;
+          }
+          
+          if (dateFilter) {
+            upcomingParams.date = dateFilter;
+            finishedParams.date = dateFilter;
+          } else {
+            // Default: next 7 days for upcoming
+            const tomorrow = new Date();
+            tomorrow.setDate(tomorrow.getDate() + 1);
+            const nextWeek = new Date();
+            nextWeek.setDate(nextWeek.getDate() + 7);
+            
+            upcomingParams.from = format(tomorrow, 'yyyy-MM-dd');
+            upcomingParams.to = format(nextWeek, 'yyyy-MM-dd');
+            
+            // Last 7 days for finished
+            const lastWeek = new Date();
+            lastWeek.setDate(lastWeek.getDate() - 7);
+            const yesterday = new Date();
+            yesterday.setDate(yesterday.getDate() - 1);
+            
+            finishedParams.from = format(lastWeek, 'yyyy-MM-dd');
+            finishedParams.to = format(yesterday, 'yyyy-MM-dd');
+          }
+          
+          const [upcomingData, finishedData] = await Promise.all([
+            fetchFootballGames(upcomingParams),
+            fetchFootballGames(finishedParams)
+          ]);
+          
+          setUpcomingGames(upcomingData);
+          setFinishedGames(finishedData);
+        } else {
+          // Basketball parameters
+          if (leagueFilter) {
+            upcomingParams.league = leagueFilter;
+            finishedParams.league = leagueFilter;
+          }
+          
+          if (seasonFilter) {
+            upcomingParams.season = seasonFilter;
+            finishedParams.season = seasonFilter;
+          } else {
+            // Current year as default season
+            const currentYear = new Date().getFullYear();
+            upcomingParams.season = currentYear.toString();
+            finishedParams.season = currentYear.toString();
+          }
+          
+          if (dateFilter) {
+            upcomingParams.date = dateFilter;
+            finishedParams.date = dateFilter;
+          } else {
+            // Default: next 7 days for upcoming
+            const tomorrow = new Date();
+            tomorrow.setDate(tomorrow.getDate() + 1);
+            upcomingParams.date = format(tomorrow, 'yyyy-MM-dd');
+            
+            // Yesterday for finished
+            const yesterday = new Date();
+            yesterday.setDate(yesterday.getDate() - 1);
+            finishedParams.date = format(yesterday, 'yyyy-MM-dd');
+          }
+          
+          const [upcomingData, finishedData] = await Promise.all([
+            fetchBasketballGames(upcomingParams),
+            fetchBasketballGames(finishedParams)
+          ]);
+          
+          setUpcomingGames(upcomingData);
+          setFinishedGames(finishedData);
+        }
+      } catch (err) {
+        console.error("Error fetching games:", err);
+        setError("Failed to load games. Please try again.");
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    
+    fetchGames();
+  }, [activeTab, leagueFilter, dateFilter, seasonFilter, teamFilter]);
   
   const resetFilters = () => {
-    setSportFilter(null);
     setLeagueFilter(null);
+    setDateFilter(null);
+    setSeasonFilter(null);
+    setTeamFilter(null);
   };
 
   const GameCard = ({ game }: { game: GameType }) => (
@@ -65,8 +184,8 @@ const Games = () => {
             />
             <div className="text-left">
               <div className="font-medium">{game.homeTeam.name}</div>
-              {game.status === 'finished' && (
-                <div className="text-lg font-bold">{game.homeScore}</div>
+              {game.status !== 'upcoming' && (
+                <div className="text-lg font-bold">{game.homeScore ?? '-'}</div>
               )}
             </div>
           </div>
@@ -76,6 +195,10 @@ const Games = () => {
               <span className="text-xs font-semibold bg-secondary px-3 py-1 rounded-full">
                 VS
               </span>
+            ) : game.status === 'live' ? (
+              <span className="text-xs font-semibold bg-red-500 text-white px-3 py-1 rounded-full animate-pulse">
+                LIVE
+              </span>
             ) : (
               <span className="text-xs font-semibold">-</span>
             )}
@@ -84,8 +207,8 @@ const Games = () => {
           <div className="flex items-center gap-3">
             <div className="text-right">
               <div className="font-medium">{game.awayTeam.name}</div>
-              {game.status === 'finished' && (
-                <div className="text-lg font-bold">{game.awayScore}</div>
+              {game.status !== 'upcoming' && (
+                <div className="text-lg font-bold">{game.awayScore ?? '-'}</div>
               )}
             </div>
             <img 
@@ -98,9 +221,9 @@ const Games = () => {
         
         <div className="flex items-center gap-2 justify-center mt-3 text-sm text-muted-foreground">
           <CalendarDays className="h-4 w-4" />
-          <span>{game.date.toLocaleDateString()}</span>
+          <span>{format(game.date, 'dd MMM yyyy')}</span>
           <Clock className="h-4 w-4 ml-2" />
-          <span>{game.date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+          <span>{format(game.date, 'HH:mm')}</span>
         </div>
         
         {game.venue && (
@@ -110,13 +233,17 @@ const Games = () => {
         )}
         
         {game.status === 'finished' ? (
-          <Button variant="outline" className="w-full mt-4">
-            View Reviews
-          </Button>
+          <Link to={`/reviews?gameId=${game.id}`}>
+            <Button variant="outline" className="w-full mt-4">
+              View Reviews
+            </Button>
+          </Link>
         ) : (
-          <Button variant="outline" className="w-full mt-4">
-            Add to Watchlist
-          </Button>
+          <Link to={`/watchlist?gameId=${game.id}`}>
+            <Button variant="outline" className="w-full mt-4">
+              Add to Watchlist
+            </Button>
+          </Link>
         )}
       </CardContent>
     </Card>
@@ -128,7 +255,14 @@ const Games = () => {
         <h1 className="text-3xl font-bold">Games</h1>
         
         <div className="flex items-center gap-4">
-          {(sportFilter || leagueFilter) && (
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="w-[400px]">
+            <TabsList className="grid w-full grid-cols-2">
+              <TabsTrigger value="football">Football ⚽</TabsTrigger>
+              <TabsTrigger value="basketball">Basketball 🏀</TabsTrigger>
+            </TabsList>
+          </Tabs>
+          
+          {(leagueFilter || dateFilter || seasonFilter || teamFilter) && (
             <Button variant="ghost" onClick={resetFilters}>
               Clear Filters
             </Button>
@@ -145,82 +279,139 @@ const Games = () => {
               <DropdownMenuLabel>Filter Games</DropdownMenuLabel>
               <DropdownMenuSeparator />
               
-              <DropdownMenuGroup>
-                <DropdownMenuLabel className="text-xs text-muted-foreground">Sports</DropdownMenuLabel>
-                {sports.map((sport) => (
-                  <DropdownMenuItem 
-                    key={sport.id}
-                    className={sportFilter === sport.id ? "bg-secondary" : ""}
-                    onClick={() => setSportFilter(sport.id)}
-                  >
-                    {sport.icon} {sport.name}
-                  </DropdownMenuItem>
-                ))}
-              </DropdownMenuGroup>
-              
-              <DropdownMenuSeparator />
-              
-              <DropdownMenuGroup>
-                <DropdownMenuLabel className="text-xs text-muted-foreground">Leagues</DropdownMenuLabel>
-                {leagues.map((league) => (
-                  <DropdownMenuItem 
-                    key={league.id}
-                    className={leagueFilter === league.id ? "bg-secondary" : ""}
-                    onClick={() => setLeagueFilter(league.id)}
-                  >
-                    {league.name}
-                  </DropdownMenuItem>
-                ))}
-              </DropdownMenuGroup>
+              {activeTab === "football" ? (
+                <>
+                  <DropdownMenuGroup>
+                    <DropdownMenuLabel className="text-xs text-muted-foreground">Leagues</DropdownMenuLabel>
+                    {leagues.map((league) => (
+                      <DropdownMenuItem 
+                        key={league.id}
+                        className={leagueFilter === league.id ? "bg-secondary" : ""}
+                        onClick={() => setLeagueFilter(league.id)}
+                      >
+                        {league.name}
+                      </DropdownMenuItem>
+                    ))}
+                  </DropdownMenuGroup>
+                  
+                  <DropdownMenuSeparator />
+                  
+                  <DropdownMenuGroup>
+                    <DropdownMenuLabel className="text-xs text-muted-foreground">Date</DropdownMenuLabel>
+                    <DropdownMenuItem 
+                      className={dateFilter === format(new Date(), 'yyyy-MM-dd') ? "bg-secondary" : ""}
+                      onClick={() => setDateFilter(format(new Date(), 'yyyy-MM-dd'))}
+                    >
+                      Today
+                    </DropdownMenuItem>
+                    <DropdownMenuItem 
+                      className={dateFilter === format(new Date(Date.now() + 86400000), 'yyyy-MM-dd') ? "bg-secondary" : ""}
+                      onClick={() => setDateFilter(format(new Date(Date.now() + 86400000), 'yyyy-MM-dd'))}
+                    >
+                      Tomorrow
+                    </DropdownMenuItem>
+                    <DropdownMenuItem 
+                      className={dateFilter === format(new Date(Date.now() - 86400000), 'yyyy-MM-dd') ? "bg-secondary" : ""}
+                      onClick={() => setDateFilter(format(new Date(Date.now() - 86400000), 'yyyy-MM-dd'))}
+                    >
+                      Yesterday
+                    </DropdownMenuItem>
+                  </DropdownMenuGroup>
+                </>
+              ) : (
+                <>
+                  <DropdownMenuGroup>
+                    <DropdownMenuLabel className="text-xs text-muted-foreground">Leagues</DropdownMenuLabel>
+                    {leagues.map((league) => (
+                      <DropdownMenuItem 
+                        key={league.id}
+                        className={leagueFilter === league.id ? "bg-secondary" : ""}
+                        onClick={() => setLeagueFilter(league.id)}
+                      >
+                        {league.name}
+                      </DropdownMenuItem>
+                    ))}
+                  </DropdownMenuGroup>
+                  
+                  <DropdownMenuSeparator />
+                  
+                  <DropdownMenuGroup>
+                    <DropdownMenuLabel className="text-xs text-muted-foreground">Season</DropdownMenuLabel>
+                    {[2023, 2022, 2021, 2020].map((year) => (
+                      <DropdownMenuItem 
+                        key={year}
+                        className={seasonFilter === year.toString() ? "bg-secondary" : ""}
+                        onClick={() => setSeasonFilter(year.toString())}
+                      >
+                        {year}
+                      </DropdownMenuItem>
+                    ))}
+                  </DropdownMenuGroup>
+                </>
+              )}
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
       </div>
       
-      <Tabs defaultValue="upcoming" className="w-full">
-        <TabsList className="mb-6">
-          <TabsTrigger value="upcoming">Upcoming Games</TabsTrigger>
-          <TabsTrigger value="finished">Finished Games</TabsTrigger>
-        </TabsList>
-        
-        <TabsContent value="upcoming">
-          {filteredUpcomingGames.length > 0 ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {filteredUpcomingGames.map(game => (
-                <GameCard key={game.id} game={game} />
-              ))}
-            </div>
-          ) : (
-            <div className="text-center py-12">
-              <h3 className="text-xl font-medium mb-2">No upcoming games found</h3>
-              <p className="text-muted-foreground">
-                {sportFilter || leagueFilter 
-                  ? "Try changing or clearing your filters" 
-                  : "Check back later for upcoming games"}
-              </p>
-            </div>
-          )}
-        </TabsContent>
-        
-        <TabsContent value="finished">
-          {filteredFinishedGames.length > 0 ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {filteredFinishedGames.map(game => (
-                <GameCard key={game.id} game={game} />
-              ))}
-            </div>
-          ) : (
-            <div className="text-center py-12">
-              <h3 className="text-xl font-medium mb-2">No finished games found</h3>
-              <p className="text-muted-foreground">
-                {sportFilter || leagueFilter 
-                  ? "Try changing or clearing your filters" 
-                  : "Games will appear here once they're completed"}
-              </p>
-            </div>
-          )}
-        </TabsContent>
-      </Tabs>
+      {isLoading ? (
+        <div className="flex justify-center items-center py-12">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          <span className="ml-2 text-lg">Loading games...</span>
+        </div>
+      ) : error ? (
+        <div className="text-center py-12">
+          <h3 className="text-xl font-medium mb-2 text-destructive">{error}</h3>
+          <Button onClick={() => window.location.reload()} className="mt-4">
+            Try Again
+          </Button>
+        </div>
+      ) : (
+        <Tabs defaultValue="upcoming" className="w-full">
+          <TabsList className="mb-6">
+            <TabsTrigger value="upcoming">Upcoming Games</TabsTrigger>
+            <TabsTrigger value="finished">Finished Games</TabsTrigger>
+          </TabsList>
+          
+          <TabsContent value="upcoming">
+            {upcomingGames.length > 0 ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {upcomingGames.map(game => (
+                  <GameCard key={game.id} game={game} />
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-12">
+                <h3 className="text-xl font-medium mb-2">No upcoming games found</h3>
+                <p className="text-muted-foreground">
+                  {leagueFilter || dateFilter || seasonFilter || teamFilter 
+                    ? "Try changing or clearing your filters" 
+                    : "Check back later for upcoming games"}
+                </p>
+              </div>
+            )}
+          </TabsContent>
+          
+          <TabsContent value="finished">
+            {finishedGames.length > 0 ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {finishedGames.map(game => (
+                  <GameCard key={game.id} game={game} />
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-12">
+                <h3 className="text-xl font-medium mb-2">No finished games found</h3>
+                <p className="text-muted-foreground">
+                  {leagueFilter || dateFilter || seasonFilter || teamFilter 
+                    ? "Try changing or clearing your filters" 
+                    : "Games will appear here once they're completed"}
+                </p>
+              </div>
+            )}
+          </TabsContent>
+        </Tabs>
+      )}
     </div>
   );
 };
