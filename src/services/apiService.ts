@@ -1,4 +1,3 @@
-
 import { supabase } from "@/integrations/supabase/client";
 import { Game, League, Sport, Team } from "@/types";
 import { toast } from "sonner";
@@ -77,9 +76,10 @@ export type BasketballGame = {
   };
 };
 
-// Function to fetch football games
 export const fetchFootballGames = async (params: Record<string, string>) => {
   try {
+    console.log("Buscando jogos de futebol com parâmetros:", params);
+    
     const { data, error } = await supabase.functions.invoke("football-api", {
       body: {
         sport: "football",
@@ -88,30 +88,44 @@ export const fetchFootballGames = async (params: Record<string, string>) => {
       }
     });
 
-    if (error) throw error;
+    if (error) {
+      console.error("Erro na função do Supabase:", error);
+      throw error;
+    }
     
-    // Check if the API returned errors (e.g., rate limit)
-    if (data.errors && Object.keys(data.errors).length > 0) {
-      console.warn("API returned errors:", data.errors);
+    // Verificar se a API retornou erros (ex. limite de taxa)
+    if (!data.success) {
+      console.warn("API retornou erros:", data.errors);
       
-      if (data.errors.requests) {
-        toast.error("API Football rate limit reached for football data.");
+      if (data.errors && data.errors.requests) {
+        toast.error("Limite de requisições da API Football atingido para dados de futebol.");
+      } else {
+        toast.error("Erro ao buscar dados de futebol.");
       }
       
       return [];
     }
 
-    return mapFootballFixturesToGames(data.response || []);
+    console.log("Resposta da API de futebol:", data);
+    
+    // Garantir que data.data.response existe e é um array
+    if (!data.data || !data.data.response || !Array.isArray(data.data.response)) {
+      console.warn("Resposta da API inválida:", data);
+      return [];
+    }
+
+    return mapFootballFixturesToGames(data.data.response);
   } catch (error) {
-    console.error("Error fetching football games:", error);
-    toast.error("Failed to load football games.");
+    console.error("Erro ao buscar jogos de futebol:", error);
+    toast.error("Falha ao carregar jogos de futebol.");
     return [];
   }
 };
 
-// Function to fetch basketball games
 export const fetchBasketballGames = async (params: Record<string, string>) => {
   try {
+    console.log("Buscando jogos de basquete com parâmetros:", params);
+    
     const { data, error } = await supabase.functions.invoke("football-api", {
       body: {
         sport: "basketball",
@@ -120,28 +134,40 @@ export const fetchBasketballGames = async (params: Record<string, string>) => {
       }
     });
 
-    if (error) throw error;
+    if (error) {
+      console.error("Erro na função do Supabase:", error);
+      throw error;
+    }
     
-    // Check if the API returned errors (e.g., rate limit)
-    if (data.errors && Object.keys(data.errors).length > 0) {
-      console.warn("API returned errors:", data.errors);
+    // Verificar se a API retornou erros (ex. limite de taxa)
+    if (!data.success) {
+      console.warn("API retornou erros:", data.errors);
       
-      if (data.errors.requests) {
-        toast.error("API Football rate limit reached for basketball data.");
+      if (data.errors && data.errors.requests) {
+        toast.error("Limite de requisições da API Football atingido para dados de basquete.");
+      } else {
+        toast.error("Erro ao buscar dados de basquete.");
       }
       
       return [];
     }
 
-    return mapBasketballGamesToGames(data.response || []);
+    console.log("Resposta da API de basquete:", data);
+    
+    // Garantir que data.data.response existe e é um array
+    if (!data.data || !data.data.response || !Array.isArray(data.data.response)) {
+      console.warn("Resposta da API inválida:", data);
+      return [];
+    }
+
+    return mapBasketballGamesToGames(data.data.response);
   } catch (error) {
-    console.error("Error fetching basketball games:", error);
-    toast.error("Failed to load basketball games.");
+    console.error("Erro ao buscar jogos de basquete:", error);
+    toast.error("Falha ao carregar jogos de basquete.");
     return [];
   }
 };
 
-// Function to fetch football leagues
 export const fetchFootballLeagues = async (country?: string) => {
   try {
     const params: Record<string, string> = {};
@@ -186,7 +212,6 @@ export const fetchFootballLeagues = async (country?: string) => {
   }
 };
 
-// Function to fetch basketball leagues
 export const fetchBasketballLeagues = async (country?: string) => {
   try {
     const params: Record<string, string> = {};
@@ -231,15 +256,12 @@ export const fetchBasketballLeagues = async (country?: string) => {
   }
 };
 
-// Helper function to map football fixtures to our Game type
 const mapFootballFixturesToGames = (fixtures: FootballFixture[]): Game[] => {
   if (!fixtures || !Array.isArray(fixtures)) return [];
   
   return fixtures.map(fixture => {
-    // Define the sport
     const sport: Sport = { id: "1", name: "Football", icon: "⚽" };
     
-    // Map the league
     const league: League = {
       id: String(fixture.league.id),
       name: fixture.league.name,
@@ -248,13 +270,12 @@ const mapFootballFixturesToGames = (fixtures: FootballFixture[]): Game[] => {
       country: fixture.league.country
     };
     
-    // Map the teams
     const homeTeam: Team = {
       id: String(fixture.teams.home.id),
       name: fixture.teams.home.name,
       logo: fixture.teams.home.logo,
       sport,
-      country: fixture.league.country // Using league country as a fallback
+      country: fixture.league.country
     };
     
     const awayTeam: Team = {
@@ -262,10 +283,9 @@ const mapFootballFixturesToGames = (fixtures: FootballFixture[]): Game[] => {
       name: fixture.teams.away.name,
       logo: fixture.teams.away.logo,
       sport,
-      country: fixture.league.country // Using league country as a fallback
+      country: fixture.league.country
     };
     
-    // Map the game status
     let status: 'upcoming' | 'live' | 'finished' = 'upcoming';
     if (fixture.fixture.status.short === 'FT' || fixture.fixture.status.short === 'AET' || 
         fixture.fixture.status.short === 'PEN') {
@@ -275,7 +295,6 @@ const mapFootballFixturesToGames = (fixtures: FootballFixture[]): Game[] => {
       status = 'live';
     }
     
-    // Create and return the Game object
     return {
       id: String(fixture.fixture.id),
       sport,
@@ -291,28 +310,29 @@ const mapFootballFixturesToGames = (fixtures: FootballFixture[]): Game[] => {
   });
 };
 
-// Helper function to map basketball games to our Game type
 const mapBasketballGamesToGames = (games: BasketballGame[]): Game[] => {
-  if (!games || !Array.isArray(games)) return [];
+  if (!games || !Array.isArray(games)) {
+    console.warn("Lista de jogos de basquete inválida:", games);
+    return [];
+  }
+  
+  console.log("Mapeando jogos de basquete:", games.length);
   
   return games.map(game => {
-    // Define the sport
     const sport: Sport = { id: "2", name: "Basketball", icon: "🏀" };
     
-    // Map the league
     const league: League = {
       id: String(game.league.id),
       name: game.league.name,
-      logo: game.league.logo,
+      logo: game.league.logo || "",
       sport,
       country: game.country.name
     };
     
-    // Map the teams
     const homeTeam: Team = {
       id: String(game.teams.home.id),
       name: game.teams.home.name,
-      logo: game.teams.home.logo,
+      logo: game.teams.home.logo || "",
       sport,
       country: game.country.name
     };
@@ -320,12 +340,11 @@ const mapBasketballGamesToGames = (games: BasketballGame[]): Game[] => {
     const awayTeam: Team = {
       id: String(game.teams.away.id),
       name: game.teams.away.name,
-      logo: game.teams.away.logo,
+      logo: game.teams.away.logo || "",
       sport,
       country: game.country.name
     };
     
-    // Map the game status
     let status: 'upcoming' | 'live' | 'finished' = 'upcoming';
     if (game.status.short === 'FT' || game.status.short === 'AOT') {
       status = 'finished';
@@ -335,7 +354,6 @@ const mapBasketballGamesToGames = (games: BasketballGame[]): Game[] => {
       status = 'live';
     }
     
-    // Create and return the Game object
     const gameDate = new Date(`${game.date} ${game.time}`);
     
     return {
@@ -347,7 +365,7 @@ const mapBasketballGamesToGames = (games: BasketballGame[]): Game[] => {
       homeScore: game.scores.home.total,
       awayScore: game.scores.away.total,
       date: gameDate,
-      venue: "", // API does not provide venue for basketball games
+      venue: "",
       status
     };
   });

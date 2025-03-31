@@ -45,7 +45,7 @@ serve(async (req) => {
     // Build the query parameters
     const queryParams = new URLSearchParams();
     for (const [key, value] of Object.entries(params)) {
-      if (value) {
+      if (value !== undefined && value !== null && value !== "") {
         queryParams.append(key, String(value));
       }
     }
@@ -63,12 +63,20 @@ serve(async (req) => {
     
     const data = await response.json();
     
+    // Log API response for debugging
+    console.log(`API Response status: ${response.status}`);
+    console.log(`API Response data:`, JSON.stringify(data).substring(0, 200) + "...");
+    
     // Handle API rate limit or other errors
     if (data.errors && Object.keys(data.errors).length > 0) {
       console.error("API Error:", data.errors);
       
       // Return the error response with appropriate status code
-      return new Response(JSON.stringify(data), {
+      return new Response(JSON.stringify({
+        success: false,
+        errors: data.errors,
+        message: "API Error occurred"
+      }), {
         status: 429, // Rate limit or other API error
         headers: {
           ...corsHeaders,
@@ -78,7 +86,10 @@ serve(async (req) => {
     }
     
     // Return the API response with CORS headers
-    return new Response(JSON.stringify(data), {
+    return new Response(JSON.stringify({
+      success: true,
+      data: data
+    }), {
       headers: {
         ...corsHeaders,
         "Content-Type": "application/json",
@@ -87,7 +98,11 @@ serve(async (req) => {
   } catch (error) {
     console.error("Error:", error.message);
     
-    return new Response(JSON.stringify({ error: error.message }), {
+    return new Response(JSON.stringify({ 
+      success: false,
+      error: error.message,
+      message: "Server error occurred"
+    }), {
       status: 500,
       headers: {
         ...corsHeaders,
